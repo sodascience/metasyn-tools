@@ -4,9 +4,10 @@
 #     "marimo>=0.25.0",
 # ]
 # ///
+
 import marimo
 
-__generated_with = "0.24.2"
+__generated_with = "0.23.16"
 app = marimo.App(width="full", app_title="metasyn")
 
 
@@ -274,6 +275,16 @@ def _(col_form, dist_array, mo, name_array, param_array, unq_array, var_array):
     return
 
 
+@app.class_definition
+class NoProgressBar():
+    def update(self, val):
+        pass
+    def close(self):
+        pass
+    def set_description(self, desc):
+        pass
+
+
 @app.cell
 def _(
     MetaFrameBuilder,
@@ -301,8 +312,8 @@ def _(
             unique = False
         builder.add_column(name=name, var_type=var_type)
         builder[name].distribution = {"name": dist_name, "unique": unique, "parameters": parameters}
-    mf = builder.fit(progress_bar=False)
-    mf.synthesize(progress_bar=False)
+    mf = builder.fit(progress_bar=NoProgressBar())
+    mf.synthesize(progress_bar=NoProgressBar())
     return (mf,)
 
 
@@ -352,7 +363,7 @@ def _(mf, mo):
 
     def _gen_csv(mf):
         handler = BytesIO()
-        mf.write_synthetic(handler, file_format=CsvFileInterface.default_interface("synthetic.csv").to_dict(), progress_bar=False)
+        mf.write_synthetic(handler, file_format=CsvFileInterface.default_interface("synthetic.csv").to_dict(), progress_bar=NoProgressBar())
         return handler
 
     mo.download(

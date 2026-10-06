@@ -23,7 +23,7 @@ def _(mo):
 async def _():
     import micropip
 
-    await micropip.install("metasyn")
+    await micropip.install(["metasyn", "xlsxwriter"])
     return
 
 
@@ -33,7 +33,7 @@ def _():
     import json
     from metasyn import MetaFrame
     from metasyn.file import CsvFileInterface, ExcelFileInterface, SavFileInterface, StataFileInterface
-    from pyreadstat import write_sav, write_dta
+    #from pyreadstat import write_sav, write_dta
     from io import BytesIO
     import re
     from pathlib import Path
@@ -49,9 +49,17 @@ def _():
         json,
         mo,
         re,
-        write_dta,
-        write_sav,
     )
+
+
+@app.class_definition
+class NoProgressBar():
+    def update(self, val):
+        pass
+    def close(self):
+        pass
+    def set_description(self, desc):
+        pass
 
 
 @app.cell(hide_code=True)
@@ -80,9 +88,10 @@ def _(mo):
 @app.cell
 def _(MetaFrame, file_ui, json):
     data = file_ui.contents()
-    mf = MetaFrame.load_json(json.loads(data.decode("utf-8")))
-    mf.synthesize(10, progress_bar=False)
-    return (mf,)
+    if data is not None:
+        mf = MetaFrame.load_json(json.loads(data.decode("utf-8")))
+        mf.synthesize(10, progress_bar=NoProgressBar())
+    return data, mf
 
 
 @app.cell(hide_code=True)
@@ -103,7 +112,7 @@ def _(BytesIO, Path, re):
 
     def gen_file(mf, file_format):
         handler = BytesIO()
-        mf.write_synthetic(handler, file_format=file_format, progress_bar=False)
+        mf.write_synthetic(handler, file_format=file_format, progress_bar=NoProgressBar())
         return handler
 
     from tempfile import NamedTemporaryFile
@@ -112,7 +121,7 @@ def _(BytesIO, Path, re):
         with NamedTemporaryFile(delete_on_close=False) as fp:
             if Path(fp.name).is_file():
                 Path(fp.name).unlink()
-            mf.write_synthetic(fp.name, file_format=file_format, progress_bar=False)
+            mf.write_synthetic(fp.name, file_format=file_format, progress_bar=NoProgressBar())
             handler = BytesIO()
             with open(fp.name, "rb") as fp_handle:
                 handler.write(fp_handle.read())
@@ -123,10 +132,13 @@ def _(BytesIO, Path, re):
 
 
 @app.cell
-def _(gen_file, mf, mo):
-    elem = None
-    if mf.file_format is not None:
-        elem = mo.download(data=gen_file(mf, None), label="Generate data file", mimetype="text/csv")
+def _(data, gen_file, mf, mo):
+    if data is not None:
+        elem = None
+        if mf.file_format is not None:
+            elem = mo.download(data=gen_file(mf, None), label="Generate data file", mimetype="text/csv")
+    else:
+        elem = mo.md("Upload your GMF file first.")
     elem
     return
 
@@ -190,7 +202,7 @@ def _(
     def load_stata():
         return load_prs_data(mf, stata_file_format, write_dta)
 
-    return load_sav, load_stata
+    return
 
 
 @app.cell
@@ -199,41 +211,43 @@ def _(mo):
     xls_file_name = mo.ui.text(value="synthetic_data.xls")
     stata_file_name = mo.ui.text(value="synthetic_data.dta")
     sav_file_name = mo.ui.text(value="synthetic_data.sav")
-    return csv_file_name, sav_file_name, stata_file_name, xls_file_name
+    return csv_file_name, xls_file_name
 
 
 @app.cell
-def _(csv_file_format, csv_file_name, gen_file, mf, mo):
-    csv_download = mo.download(data=gen_file(mf, csv_file_format), filename=csv_file_name.value, mimetype="text/csv", label="Generate CSV")
-    csv_gen = mo.hstack([mo.md("File name:").style({"width": "120px"}), csv_file_name], widths=[0,1])
-    csv_click = mo.hstack([mo.md("").style({"width": "120px"}), csv_download], widths=[0,1])
+def _(csv_file_format, csv_file_name, data, gen_file, mf, mo):
+    if data is not None:
+        csv_download = mo.download(data=gen_file(mf, csv_file_format), filename=csv_file_name.value, mimetype="text/csv", label="Generate CSV")
+        csv_gen = mo.hstack([mo.md("File name:").style({"width": "120px"}), csv_file_name], widths=[0,1])
+        csv_click = mo.hstack([mo.md("").style({"width": "120px"}), csv_download], widths=[0,1])
     return csv_click, csv_gen
 
 
 @app.cell
-def _(gen_file, mf, mo, xls_file_format, xls_file_name, xls_work_sheet):
-    xls_mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if xls_file_name.value.endswith("xlsx") else "application/vnd.ms-excel"
-    xls_file_row = mo.hstack([mo.md("File name:").style({"width": "120px"}), xls_file_name], widths=[0,1])
-    xls_download = mo.download(data=gen_file(mf, xls_file_format), filename=xls_file_name.value, mimetype=xls_mime_type, label="Generate Excel file")
-    xls_click = mo.hstack([mo.md("").style({"width": "120px"}), xls_download], widths=[0,1])
-    xls_sheet_row = mo.hstack([mo.md("Sheet name:").style({"width": "120px"}), xls_work_sheet], widths=[0, 1])
+def _(data, gen_file, mf, mo, xls_file_format, xls_file_name, xls_work_sheet):
+    if data is not None:
+        xls_mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if xls_file_name.value.endswith("xlsx") else "application/vnd.ms-excel"
+        xls_file_row = mo.hstack([mo.md("File name:").style({"width": "120px"}), xls_file_name], widths=[0,1])
+        xls_download = mo.download(data=gen_file(mf, xls_file_format), filename=xls_file_name.value, mimetype=xls_mime_type, label="Generate Excel file")
+        xls_click = mo.hstack([mo.md("").style({"width": "120px"}), xls_download], widths=[0,1])
+        xls_sheet_row = mo.hstack([mo.md("Sheet name:").style({"width": "120px"}), xls_work_sheet], widths=[0, 1])
     return xls_click, xls_file_row, xls_sheet_row
 
 
 @app.cell
-def _(load_stata, mo, stata_file_name):
-    stata_file_row = mo.hstack([mo.md("File name:").style({"width": "80px"}), stata_file_name], widths=[0,1])
-    stata_download = mo.download(data=load_stata, filename=stata_file_name.value, mimetype="MimeType=application/x-stata-dta", label="Generate Stata file")
-    stata_click = mo.hstack([mo.md("").style({"width": "80px"}), stata_download], widths=[0,1])
-    return stata_click, stata_file_row
+def _():
+    #stata_file_row = mo.hstack([mo.md("File name:").style({"width": "80px"}), stata_file_name], widths=[0,1])
+    #stata_download = mo.download(data=load_stata, filename=stata_file_name.value, mimetype="MimeType=application/x-stata-dta", label="Generate Stata file")
+    #stata_click = mo.hstack([mo.md("").style({"width": "80px"}), stata_download], widths=[0,1])
+    return
 
 
 @app.cell
-def _(load_sav, mo, sav_file_name):
-    sav_file_row = mo.hstack([mo.md("File name:").style({"width": "80px"}), sav_file_name], widths=[0,1])
-    sav_download = mo.download(data=load_sav, filename=sav_file_name.value, mimetype="MimeType=application/x-spss-sav", label="Generate Sav file")
-    sav_click = mo.hstack([mo.md("").style({"width": "80px"}), sav_download], widths=[0,1])
-    return sav_click, sav_file_row
+def _():
+    #sav_file_row = mo.hstack([mo.md("File name:").style({"width": "80px"}), sav_file_name], widths=[0,1])
+    #sav_download = mo.download(data=load_sav, filename=sav_file_name.value, mimetype="MimeType=application/x-spss-sav", label="Generate Sav file")
+    #sav_click = mo.hstack([mo.md("").style({"width": "80px"}), sav_download], widths=[0,1])
+    return
 
 
 @app.cell(hide_code=True)
@@ -249,23 +263,24 @@ def _(
     csv_click,
     csv_dict,
     csv_gen,
+    data,
     mo,
-    sav_click,
-    sav_file_row,
-    stata_click,
-    stata_file_row,
     xls_click,
     xls_file_row,
     xls_sheet_row,
 ):
-    mo.hstack((
-        mo.vstack([mo.hstack([mo.md(label).style({"width": "120px"}), elem], widths=[0, 1]) for label, elem in csv_dict.items()] + [csv_gen, csv_click]),
-        mo.vstack([xls_sheet_row, xls_file_row, xls_click]),
-        mo.vstack([stata_file_row, stata_click]),
-        mo.vstack([sav_file_row, sav_click])
-        ),
-        align="end"
-    )
+    if data is not None:
+        display = mo.hstack((
+            mo.vstack([mo.hstack([mo.md(label).style({"width": "120px"}), elem], widths=[0, 1]) for label, elem in csv_dict.items()] + [csv_gen, csv_click]),
+            mo.vstack([xls_sheet_row, xls_file_row, xls_click]),
+            #mo.vstack([stata_file_row, stata_click]),
+            #mo.vstack([sav_file_row, sav_click])
+            ),
+            align="end"
+        )
+    else:
+        display = mo.md("Load your GMF file first")
+    display
     return
 
 

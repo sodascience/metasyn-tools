@@ -4,9 +4,10 @@
 #     "marimo>=0.25.0",
 # ]
 # ///
+
 import marimo
 
-__generated_with = "0.24.2"
+__generated_with = "0.23.16"
 app = marimo.App(width="full", app_title="metasyn - synthesize")
 
 
@@ -15,6 +16,14 @@ def _(mo):
     mo.md(r"""
     # Convert your GMF file to a synthetic data file
     """)
+    return
+
+
+@app.cell
+async def _():
+    import micropip
+
+    await micropip.install("metasyn")
     return
 
 

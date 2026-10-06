@@ -24,8 +24,6 @@ async def _():
     import micropip
 
     await micropip.install("metasyn")
-    import metasyn
-
     return
 
 

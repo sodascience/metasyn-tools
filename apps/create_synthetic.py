@@ -156,10 +156,11 @@ def _(DistributionRegistry, defaultdict):
             return {}
         res_dict = defaultdict(list)
         for dist in distributions:
+            dist_name = dist.name[5:] if dist.name.startswith("core.") else dist.name
             if isinstance(dist.var_type, str):
-                res_dict[dist.name].append(dist.var_type)
+                res_dict[dist_name].append(dist.var_type)
             else:
-                res_dict[dist.name].extend(dist.var_type)
+                res_dict[dist_name].extend(dist.var_type)
         return res_dict
 
 
@@ -190,7 +191,7 @@ def _(
 
 
 @app.cell
-def _(mo, np, reg, update_param_defaults, update_param_state):
+def _(get_param_state, mo, np, reg, update_param_defaults, update_param_state):
     def get_parameters(dist_name, var_type, unique, idx):
         try:
             dist = reg.find_distribution(dist_name, var_type=var_type, unique=unique)
@@ -205,8 +206,15 @@ def _(mo, np, reg, update_param_defaults, update_param_state):
         update_param_defaults(idx, params)
         for key, val in params.items():
             on_change = lambda v, idx=idx, param_name=key: update_param_state(idx, param_name, v, list(params))
+            val = val if key not in get_param_state()[idx] else get_param_state()[idx][key]
             if isinstance(val, str) and dist.var_type == "datetime" and key in ["lower", "upper", "value"]:
                 cur_param_form.append(mo.ui.datetime(value=val, label=key + ": ", on_change=on_change))
+            elif isinstance(val, str) and key == "faker_type":
+                from faker import Faker
+                locale = get_param_state()[idx]["locale"]
+                fake_list = dir(Faker(locale=locale))
+                fake_list = [x for x in fake_list if not (x.startswith("_") or x in ['cache_pattern', 'factories', 'generator_attrs', 'items', 'locales', 'random', 'seed', 'seed_instance', 'seed_locale', 'weights'])]
+                cur_param_form.append(mo.ui.dropdown(fake_list, value=val, label="type:", on_change=on_change))
             elif isinstance(params[key], str):
                 cur_param_form.append(mo.ui.text(value=val, label=key + ": " , on_change=on_change))
             elif isinstance(params[key], bool):
@@ -226,6 +234,12 @@ def _(mo, np, reg, update_param_defaults, update_param_state):
         return cur_param_form
 
     return (get_parameters,)
+
+
+@app.cell
+def _(update_param_state):
+    update_param_state(0, "faker_type", "city", ["faker_type", "locale"])
+    return
 
 
 @app.cell
@@ -266,8 +280,8 @@ def _(mo):
 
 @app.cell
 def _(col_form, dist_array, mo, name_array, param_array, unq_array, var_array):
-    mo.hstack([
-        mo.vstack([name_array[i], var_array[i], unq_array[i], dist_array[i], *param_array[i]])
+    mo.hstack(
+        [mo.vstack([mo.md("Column name:"), mo.md("Variable type:"), mo.md("Uniqueness:"), mo.md("Distribution:"), mo.md("Parameters:")])] + [mo.vstack([name_array[i], var_array[i], unq_array[i], dist_array[i], *param_array[i]])
         for i in range(col_form.value)
     ])
     return

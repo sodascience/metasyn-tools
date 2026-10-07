@@ -86,11 +86,14 @@ def _(mo):
 
 
 @app.cell
-def _(MetaFrame, file_ui, json):
+def _(MetaFrame, file_ui, json, mo):
     data = file_ui.contents()
     if data is not None:
         mf = MetaFrame.load_json(json.loads(data.decode("utf-8")))
-        mf.synthesize(10, progress_bar=NoProgressBar())
+        df_synth = mf.synthesize(10, progress_bar=NoProgressBar())
+    else:
+        df_synth = mo.md("Cannot create synthetic dataset, load GMF file first.")
+    df_synth
     return data, mf
 
 

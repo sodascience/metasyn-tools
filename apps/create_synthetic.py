@@ -53,7 +53,7 @@ def _(mo):
     row_get_state, row_set_state = mo.state(10)
     col_form = mo.ui.slider(1, 8, value=col_get_state(), show_value=True, label="Number of columns:  ", on_change=col_set_state)
     row_form = mo.ui.number(1, value=row_get_state(), label="Number of rows:  ", on_change=row_set_state)
-    mo.hstack([col_form, row_form])
+    mo.vstack([col_form, row_form])
     #run_button = mo.ui.run_button(label="Submit")
     return col_form, row_form
 
@@ -191,7 +191,7 @@ def _(
 
 
 @app.cell
-def _(get_param_state, mo, np, reg, update_param_defaults, update_param_state):
+def _(mo, np, reg, update_param_defaults, update_param_state):
     def get_parameters(dist_name, var_type, unique, idx):
         try:
             dist = reg.find_distribution(dist_name, var_type=var_type, unique=unique)
@@ -202,18 +202,17 @@ def _(get_param_state, mo, np, reg, update_param_defaults, update_param_state):
             params = {"regex_data": params["regex_data"]["regex"]}
 
         cur_param_form = []
-        #cur_col_name = name_forms[m_col].value
         update_param_defaults(idx, params)
         for key, val in params.items():
             on_change = lambda v, idx=idx, param_name=key: update_param_state(idx, param_name, v, list(params))
-            val = val if key not in get_param_state()[idx] else get_param_state()[idx][key]
             if isinstance(val, str) and dist.var_type == "datetime" and key in ["lower", "upper", "value"]:
                 cur_param_form.append(mo.ui.datetime(value=val, label=key + ": ", on_change=on_change))
             elif isinstance(val, str) and key == "faker_type":
                 from faker import Faker
-                locale = get_param_state()[idx]["locale"]
+                locale = "en_US"
                 fake_list = dir(Faker(locale=locale))
-                fake_list = [x for x in fake_list if not (x.startswith("_") or x in ['cache_pattern', 'factories', 'generator_attrs', 'items', 'locales', 'random', 'seed', 'seed_instance', 'seed_locale', 'weights'])]
+                fake_list = [x for x in fake_list if not (x.startswith("_") or x in ['cache_pattern', 'factories', 'generator_attrs', 'items', 'locales', 'random', 'seed', 'seed_instance', 'seed_locale', 'weights', 'binary', 'enum',
+                                                                                    'provider', 'providers'])]
                 cur_param_form.append(mo.ui.dropdown(fake_list, value=val, label="type:", on_change=on_change))
             elif isinstance(params[key], str):
                 cur_param_form.append(mo.ui.text(value=val, label=key + ": " , on_change=on_change))

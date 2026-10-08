@@ -84,8 +84,24 @@ def _(col_form, mo):
             new_val if idx == i else v for idx, v in enumerate(cur)
         ])
 
+
+    return (
+        get_dist_state,
+        get_name_state,
+        get_unq_state,
+        get_var_state,
+        update_dist_state,
+        update_name_state,
+        update_unq_state,
+        update_var_state,
+    )
+
+
+@app.cell
+def _(col_form, mo):
     get_param_state, set_param_state = mo.state([{} for _ in range(col_form.value)])
     def update_param_state(i, param_name, new_val, all_names):
+        print("new_val", new_val)
         set_param_state(lambda cur: [
             {x: y for x, y in v.items() if x in all_names} | {param_name: new_val} if idx == i else v for idx, v in enumerate(cur)
         ])
@@ -97,19 +113,7 @@ def _(col_form, mo):
             default_params if idx==i else v for idx, v in enumerate(cur)
         ])
 
-    return (
-        get_dist_state,
-        get_name_state,
-        get_param_state,
-        get_unq_state,
-        get_var_state,
-        update_dist_state,
-        update_name_state,
-        update_param_defaults,
-        update_param_state,
-        update_unq_state,
-        update_var_state,
-    )
+    return get_param_state, update_param_defaults, update_param_state
 
 
 @app.cell
@@ -219,7 +223,7 @@ def _(mo, np, reg, update_param_defaults, update_param_state):
             elif isinstance(params[key], bool):
                 cur_param_form.append(mo.ui.checkbox(value=val, label=key, on_change=on_change))
             elif isinstance(params[key], (float, int)):
-                cur_param_form.append(mo.ui.number(value = val, label=key + ": ", on_change=on_change))
+                cur_param_form.append(mo.ui.number(value=val, label=key + ": ", on_change=on_change))
             elif isinstance(params[key], np.ndarray):
                 if key == "probs":
                     array_change = lambda v, idx=idx, param_name=key: update_param_state(idx, param_name, [float(x.strip()) for x in v.split(",")], list(params))
@@ -232,12 +236,60 @@ def _(mo, np, reg, update_param_defaults, update_param_state):
                 raise ValueError("Not implemented type: ", type(params[key]), params[key])
         return cur_param_form
 
-    return (get_parameters,)
+    return
 
 
 @app.cell
-def _(update_param_state):
-    update_param_state(0, "faker_type", "city", ["faker_type", "locale"])
+def _(np, reg):
+    def get_params(dist_name, var_type, unique, idx):
+        try:
+            dist = reg.find_distribution(dist_name, var_type=var_type, unique=unique)
+        except ValueError:
+            return
+        default_params = dist.default_distribution().to_dict()["parameters"]
+        if "regex_data" in default_params:
+            default_params = {"regex_data": default_params["regex_data"]["regex"]}
+
+        #cur_param_form = []
+        #cur_col_name = name_forms[m_col].value
+        #update_param_defaults(idx, params)
+        for param_name, default_val in default_params.items():
+            options = []
+            if isinstance(default_val, str) and dist.var_type == "datetime" and param_name in ["lower", "upper", "value"]:
+                ui_type = "datetime"
+            elif isinstance(default_val, str) and param_name == "faker_type":
+                from faker import Faker
+                #locale = get_param_state()[idx]["locale"]
+                locale = "en_US"
+                fake_list = dir(Faker(locale=locale))
+                ui_type = "dropdown"
+                options = [x for x in fake_list if not (x.startswith("_") or x in ['cache_pattern', 'factories', 'generator_attrs', 'items', 'locales', 'random', 'seed', 'seed_instance', 'seed_locale', 'weights'])]
+            elif isinstance(default_val, str):
+                ui_type = "text"
+            elif isinstance(default_val, bool):
+                ui_type = "checkbox"
+            elif isinstance(default_val, (float, int)):
+                ui_type = "number"
+            elif isinstance(default_val, np.ndarray):
+                default_val = ",".join(str(x) for x in default_val)
+                ui_type = "text"
+            else:
+                raise ValueError("Not implemented type: ", type(default_val), default_val)
+            yield ui_type, options, default_val, param_name, list(default_params)
+
+    return (get_params,)
+
+
+@app.cell
+def _():
+    #param_array = mo.ui.array(
+    #    [
+    #        mo.ui.array(
+    #            get_parameters(get_dist_state()[i], var_type=get_var_state()[i], unique=get_unq_state()[i], idx=i)
+    #        )
+    #        for i in range(col_form.value)
+    #    ]
+    #)
     return
 
 
@@ -245,20 +297,48 @@ def _(update_param_state):
 def _(
     col_form,
     get_dist_state,
-    get_parameters,
+    get_params,
     get_unq_state,
     get_var_state,
     mo,
+    update_param_state,
 ):
-    param_array = mo.ui.array(
+    param_array_2 = mo.ui.array(
         [
-            mo.ui.array(
-                get_parameters(get_dist_state()[i], var_type=get_var_state()[i], unique=get_unq_state()[i], idx=i)
-            )
-            for i in range(col_form.value)
+            mo.ui.array([
+                mo.ui.dropdown(options=options, value=default_val, label=param_name + ":", on_change=lambda v, idx=idx, param_name=param_name: update_param_state(idx, param_name, v, list(params))) if ui_type == "dropdown" else
+                mo.ui.text(value=default_val, label=param_name + ":", on_change=lambda v, idx=idx, param_name=param_name: update_param_state(idx, param_name, v, list(params))) if ui_type == "text" else
+                mo.ui.checkbox(value=default_val, label=param_name + ":", on_change=lambda v, idx=idx, param_name=param_name: update_param_state(idx, param_name, v, list(params))) if ui_type == "checkbox" else
+                mo.ui.number(value=default_val, label=param_name + ":", on_change=lambda v, idx=idx, param_name=param_name: update_param_state(idx, param_name, v, list(params))) if ui_type == "number" else
+                mo.ui.datetime(value=default_val, label=param_name + ":", on_change=lambda v, idx=idx, param_name=param_name: update_param_state(idx, param_name, v, list(params))) if ui_type == "datetime" else None
+                for ui_type, options, default_val, param_name, params in get_params(get_dist_state()[idx], var_type=get_var_state()[idx], unique=get_unq_state()[idx], idx=idx) if ui_type is not None
+            ])
+            for idx in range(col_form.value)
         ]
     )
-    return (param_array,)
+    return (param_array_2,)
+
+
+@app.cell
+def _():
+    #idx=0
+    #key="label"
+    #params = ["labels", "probs"]
+    #array_change = lambda v, idx=idx, param_name=key: update_param_state(idx, param_name, v.split(","), list(params))
+    #array_change("a,b,d")
+    return
+
+
+@app.cell
+def _():
+    #update_param_state(0, "labels", ["a", "b", "d"], ["labels", "probs"])
+    return
+
+
+@app.cell
+def _(get_param_state):
+    get_param_state()
+    return
 
 
 @app.cell(hide_code=True)
@@ -278,9 +358,17 @@ def _(mo):
 
 
 @app.cell
-def _(col_form, dist_array, mo, name_array, param_array, unq_array, var_array):
+def _(
+    col_form,
+    dist_array,
+    mo,
+    name_array,
+    param_array_2,
+    unq_array,
+    var_array,
+):
     mo.hstack(
-        [mo.vstack([mo.md("Column name:"), mo.md("Variable type:"), mo.md("Uniqueness:"), mo.md("Distribution:"), mo.md("Parameters:")])] + [mo.vstack([name_array[i], var_array[i], unq_array[i], dist_array[i], *param_array[i]])
+        [mo.vstack([mo.md("Column name:"), mo.md("Variable type:"), mo.md("Uniqueness:"), mo.md("Distribution:"), mo.md("Parameters:")])] + [mo.vstack([name_array[i], var_array[i], unq_array[i], dist_array[i], *param_array_2[i]])
         for i in range(col_form.value)
     ])
     return

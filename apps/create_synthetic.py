@@ -34,7 +34,6 @@ def _():
 
     from metasyn import MetaFrameBuilder
     from metasyn.registry import DistributionRegistry
-    from metasyn.distribution.uniform import DateTimeUniformDistribution
     from collections import defaultdict
 
     return DistributionRegistry, DateTimeUniformDistribution, MetaFrameBuilder, defaultdict, mo, np
@@ -237,12 +236,9 @@ def _(get_param_state, np, reg, update_param_defaults, update_param_state):
                 options = [x for x in fake_list if not (x.startswith("_") or x in ['cache_pattern', 'factories', 'generator_attrs', 'items', 'locales', 'random', 'seed', 'seed_instance', 'seed_locale', 'weights', 'binary', 'enum',
                                                                                     'provider', 'providers'])]
 
-
             elif isinstance(default_val, str) and param_name == "precision":
-
                 ui_type = "dropdown"
                 options = [x for x in DistributionRegistry.parse('builtin').distributions if x.__name__=='DateTimeUniformDistribution'][0].precision_possibilities
-
             elif isinstance(default_val, str):
                 ui_type = "text"
             elif isinstance(default_val, bool):
